@@ -33,7 +33,7 @@ fastify.post('/monitors', async (req, reply) => {
 		const { monitor_name, expected_interval, grace_period } = req.body;
 		const monitor_key = crypto.randomBytes(8).toString('hex');
 
-		const response = await fastify.pg.query(`INSERT INTO monitors(name, expected_interval, grace_period, monitor_key, status) VALUES($1, $2, $3, $4, 'ok') RETURNING *`,
+		const response = await fastify.pg.query(`INSERT INTO monitors(name, expected_interval, grace_period, monitor_key, status) VALUES($1, $2, $3, $4, 'pending') RETURNING *`,
 			[monitor_name, expected_interval, grace_period, monitor_key]);
 
 		return reply.code(202).send(response.rows[0]);
@@ -115,6 +115,10 @@ fastify.get('/ping/:monitor_key', async (req, reply) => {
 
 // Watchdog check one monitor
 async function checkMonitor(monitor) {
+
+	if (monitor.status === 'failed')
+		return;
+
 	const lastPingResult = await fastify.pg.query(`SELECT * FROM pings WHERE monitor_id=$1 ORDER BY TIMESTAMP DESC LIMIT 1`, [monitor.id]);
 
 	if (lastPingResult.rows.length == 0) 

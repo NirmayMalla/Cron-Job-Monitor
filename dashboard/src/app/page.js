@@ -12,6 +12,14 @@ export default function Home() {
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] =  useState("");
+  const [seconds, setSeconds] = useState("");
+
+  function toSeconds(h, m, s) {
+    return (parseInt(h) || 0) * 3600 + (parseInt(m) || 0) * 60 + (parseInt(s) ||  0);
+  }
+
   async function toggleHistory(monitorId) {
     if (expandedId === monitorId) {
       setExpandedId(null);
@@ -89,14 +97,16 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           monitor_name: monitorName,
-          expected_interval: parseInt(expectedInterval),
+          expected_interval: toSeconds(hours, minutes, seconds),
           grace_period: parseInt(grace) || 0,
         })
       });
       if (!response.ok) 
         throw new Error("Failed to create monitor");
       setMonitorName("");
-      setExpectedInterval("");
+      setHours("");
+      setMinutes("");
+      setSeconds("");
       setGrace("");
       setShowForm(false);
       fetchMonitors();    // refresh list
@@ -110,12 +120,13 @@ export default function Home() {
     if (status === "ok") return "bg-emerald-500";
     if (status === "late") return "bg-amber-500";
     if (status === "failed") return "bg-red-500";
+    if (status === "pending") return "bg-neutral-300";
     return "bg-neutral-500";
   }
 
   return (
     <main className="min-h-screen bg-neutral-800">
-      <div className="mx-auto max-w-4xl px-6 py-12">
+      <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="flex items-center justify-between mb-10">
           <h1 className="text-2xl font-semibold text-white">
             Cron Job Monitor
@@ -129,6 +140,7 @@ export default function Home() {
         {showForm && (
           <form 
             onSubmit={handleCreate}
+            className="flex flex-col gap-2"
             /* className="mb-rounded-lg border border-neutral-800 bg-gray-900" */
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -138,18 +150,44 @@ export default function Home() {
                   value={monitorName}
                   onChange={(e) => setMonitorName(e.target.value)}
                   required
+                  maxLength={30}
                   className="w-full rounded-md bg-transparent border border-neutral-500 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none"
                 />
               </div>
-              <div>
-                <input
-                  placeholder="Expected interval (seconds)"
-                  type="number"
-                  value={expectedInterval}
-                  onChange={(e) => setExpectedInterval(e.target.value)}
-                  required
-                  className="w-full rounded-md bg-transparent border border-neutral-500 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none"
-                />
+              <div className="flex items-end">
+                <label className="block text-xs text-slate-500 mb-1.5">Expected Interval</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    min="0"
+                    required
+                    className="w-16 rounded-md bg-transparent border border-neutral-500 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none"
+                  />
+                  <span className="text-xs text-neutral-500">hr</span>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                    min="0"
+                    max="59"
+                    className="w-16 rounded-md bg-transparent border border-neutral-500 px-2 py-2 text-sm text-white text-center"
+                  />
+                  <span className="text-xs text-neutral-500">min</span>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={seconds}
+                    onChange={(e) => setSeconds(e.target.value)}
+                    min="0"
+                    max="59"
+                    className="w-16 rounded-md bg-transparent border border-neutral-500 px-2 py-2 text-sm text-white text-center"
+                  />
+                  <span className="text-xs text-neutral-500">sec</span>
+                </div>
               </div>
               <div>
                 <input
@@ -170,7 +208,7 @@ export default function Home() {
             </button>
           </form>
         )}
-        <div>
+        <div className="mt-5">
           {monitors.length == 0 ? (
             <div className="mt-10 rounded-lg border border-dashed border-white py-16 text-center">
               <p className="text-white text-sm">No monitors created yet</p>
@@ -195,13 +233,13 @@ export default function Home() {
                       </p>
                     </div>
                     <button 
-                      onClick={() => ping(monitor.monitor_key, 'completed')}
+                      onClick={(e) => { e.stopPropagation(); ping(monitor.monitor_key, 'completed'); }}
                       className="rounded border border-transparent px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-600 transition-colors cursor-pointer"
                       >
                         Complete
                     </button>
                     <button 
-                      onClick={() => ping(monitor.monitor_key, 'failed')}
+                      onClick={(e) => { e.stopPropagation(); ping(monitor.monitor_key, 'failed'); }}
                       className="rounded border border-transparent px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-600 transition-colors cursor-pointer"
                       >
                         Fail
