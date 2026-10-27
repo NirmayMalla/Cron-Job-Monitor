@@ -83,7 +83,7 @@ export default function LoginPage() {
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					minLength={mode === 'signup' ? 10 : undefined}
-					maxLength={128}
+					maxLength={72}
 					required
 					className={inputClass}
 				/>

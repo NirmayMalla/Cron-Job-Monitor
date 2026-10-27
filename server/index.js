@@ -1,7 +1,7 @@
 require('dotenv').config();
 const crypto = require('crypto');
-const { promisify } = require('util');
 const fastify = require('fastify')({ logger: true });
+const bcrypt = require('bcryptjs')
 
 // Config
 const {
@@ -48,35 +48,14 @@ async function sendAlert(message) {
 }
 
 // Passwords 
-const scrypt = promisify(crypto.scrypt);
-const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
-let DUMMY_HASH; // created at startup; used so unknown emails take as long as wrong passwords
 
-async function hashPassword(password) {
-	const salt = crypto.randomBytes(16);
-	const hash = await scrypt(password, salt, 64, SCRYPT_PARAMS);
-	const { N, r, p } = SCRYPT_PARAMS;
-	return `scrypt$${N}$${r}$${p}$${salt.toString('base64')}$${hash.toString('base64')}`;
-}
+const hashPassword = (password) => bcrypt.hash(password, 12);
+const verifyPassword = (password, hash) => bcrypt.compare(password, hash);
 
-async function verifyPassword(password, stored) {
-	const [scheme, N, r, p, saltB64, hashB64] = stored.split('$');
-	if (scheme !== 'scrypt') return false;
-	const expected = Buffer.from(hashB64, 'base64');
-	const actual = await scrypt(
-		password,
-		Buffer.from(saltB64, 'base64'),
-		expected.length,
-		{
-			N: +N,
-			r: +r,
-			p: +p,
-		},
-	);
-	return crypto.timingSafeEqual(actual, expected);
-}
+let DUMMY_HASH;
 
 // Sessions 
+
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 // A new random token every login, so an attacker can never plant a known session id
@@ -125,7 +104,7 @@ const credentialsSchema = (minPassword) => ({
 			password: {
 				type: 'string',
 				minLength: minPassword,
-				maxLength: 128,
+				maxLength: 72,
 			},
 		},
 	},
@@ -277,7 +256,8 @@ function registerRoutes() {
 		email: req.user.email,
 	}));
 
-	// ----- Per-user telemetry key -----
+
+	// Per-user telemetry key 
 	fastify.get('/config', { onRequest: requireAuth }, async (req) => ({
 		telemetry_key: req.user.telemetry_key,
 		telemetry_base_url: baseUrlFor(req.user.telemetry_key),
@@ -309,7 +289,7 @@ function registerRoutes() {
 		},
 	);
 
-	// ----- Monitors (always scoped to the logged-in user) -----
+	// Monitors (for each user) 
 	fastify.post(
 		'/monitors',
 		{
@@ -380,7 +360,8 @@ function registerRoutes() {
 		}
 	});
 
-	// The JOIN on user_id stops user B reading user A's history by guessing an id
+	// JOIN on user_id stops user B reading user A's history by guessing an id
+
 	fastify.get(
 		'/monitors/:id/pings',
 		{
@@ -412,7 +393,8 @@ function registerRoutes() {
 		},
 	);
 
-	// Telemetry (authenticated by the user's key in the URL, not by cookie) 
+	// Telemetry (authenticated by the user's key in the URL) 
+
 	fastify.route({
 		method: ['GET', 'POST'],
 		url: '/p/:telemetry_key/:name',
@@ -445,6 +427,7 @@ function registerRoutes() {
 				const name = req.params.name;
 
 				// The key identifies WHOSE monitors these are
+
 				const owner = await fastify.pg.query(
 					'SELECT id FROM users WHERE telemetry_key = $1',
 					[req.params.telemetry_key],
@@ -461,7 +444,8 @@ function registerRoutes() {
 						[userId, name],
 					);
 
-					// Unknown name: auto-create, up to a per-user cap
+					// Unknown name: auto-create (with a cap)
+
 					if (found.rows.length === 0) {
 						const count = await client.query(
 							'SELECT count(*)::int AS n FROM monitors WHERE user_id = $1',
@@ -549,13 +533,13 @@ function registerRoutes() {
 
 				const { monitor } = outcome;
 				if (state === 'fail' && monitor.status !== 'failed') {
-					sendAlert(`🔴 *${safe(monitor.name)}* reported a failure`);
+					sendAlert(`*${safe(monitor.name)}* reported a failure`);
 				}
 				if (
 					state === 'complete' &&
 					(monitor.status === 'late' || monitor.status === 'failed')
 				) {
-					sendAlert(`✅ *${safe(monitor.name)}* recovered`);
+					sendAlert(`*${safe(monitor.name)}* recovered`);
 				}
 
 				return reply.send({ message: `Ping recorded ${state}` });
@@ -567,7 +551,7 @@ function registerRoutes() {
 	});
 }
 
-// ---------- Watchdog ----------
+// Watchdog
 let watchdogTimer;
 let cleanupTimer;
 let shuttingDown = false;
@@ -586,7 +570,7 @@ async function watchdogTick() {
 		for (const m of result.rows) {
 			fastify.log.info(`Monitor ${m.id} is now late`);
 			sendAlert(
-				`🟠 *${safe(m.name)}* is LATE: no ping received within its schedule`,
+				`*${safe(m.name)}* is LATE: no ping received within its schedule`,
 			);
 		}
 	} catch (err) {
@@ -613,7 +597,8 @@ async function cleanupTick() {
 	}
 }
 
-// ---------- Startup / shutdown ----------
+// Startup / shutdown
+
 async function shutdown(signal) {
 	fastify.log.info(`${signal} received, shutting down`);
 	shuttingDown = true;
@@ -634,8 +619,6 @@ async function start() {
 			connectionString: DATABASE_URL,
 		});
 		await fastify.register(require('@fastify/cookie'));
-		// credentials: true lets the browser send the session cookie cross-origin.
-		// The origin must be one exact address, never '*'.
 		await fastify.register(require('@fastify/cors'), {
 			origin: FRONTEND_ORIGIN,
 			credentials: true,
@@ -645,30 +628,13 @@ async function start() {
 			timeWindow: '1 minute',
 		});
 
-		// CSRF defense in depth: browsers always send Origin on cross-site writes.
-		// Telemetry URLs (/p/...) use a key instead of cookies, so they're exempt.
-		fastify.addHook('onRequest', async (req, reply) => {
-			const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-			if (isWrite && !req.url.startsWith('/p/')) {
-				const origin = req.headers.origin;
-				if (origin && origin !== FRONTEND_ORIGIN) {
-					return reply
-						.code(403)
-						.send({ error: 'Origin not allowed' });
-				}
-			}
-		});
-
-		DUMMY_HASH = await hashPassword(crypto.randomBytes(16).toString('hex'));
+		DUMMY_HASH = await hashPassword('placeholder-password');
 
 		registerRoutes();
-		await fastify.listen({ port: PORT });
+		await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
 		watchdogTick();
 		cleanupTimer = setInterval(cleanupTick, 60 * 60 * 1000);
-		fastify.log.info(
-			`Watchdog started, checking every ${WATCHDOG_INTERVAL_MS}ms`,
-		);
 	} catch (err) {
 		fastify.log.error(err);
 		process.exit(1);
