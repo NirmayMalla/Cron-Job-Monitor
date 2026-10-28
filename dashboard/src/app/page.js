@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from './api';
 
+import { Trash2 } from 'lucide-react'; 
+
 import MonitorCharts from './monitor-chart';
 
 const EVENT_LABELS = { run: 'Run', complete: 'Complete', fail: 'Fail' };
@@ -134,6 +136,7 @@ export default function Home() {
 		setSelectedId(id);
 	}
 
+
 	async function logout() {
 		try {
 			await api('/auth/logout', { method: 'POST' });
@@ -142,6 +145,7 @@ export default function Home() {
 		}
 		router.replace('/login');
 	}
+
 
 	async function copyKey() {
 		try {
@@ -152,6 +156,7 @@ export default function Home() {
 			console.log(err);
 		}
 	}
+
 
 	async function regenerateKey() {
 		if (
@@ -173,6 +178,7 @@ export default function Home() {
 			console.log(err);
 		}
 	}
+
 
 	async function handleCreate(e) {
 		e.preventDefault();
@@ -208,6 +214,28 @@ export default function Home() {
 			setShowForm(false);
 			await fetchMonitors();
 			selectMonitor(created.id);
+		} catch (err) {
+			console.log(err);
+		}
+	}
+	
+	async function deleteMonitor(id, name) {
+		if (
+			!window.confirm(
+				`Delete "${name}" and all of its history? This can't be undone.`,
+			)
+		)
+			return;
+		try {
+			const response = await api(`/monitors/${id}`, { method: 'DELETE' });
+			if (handleUnauthorized(response)) return;
+			if (!response.ok) throw new Error('Failed to delete monitor');
+			if (id === selectedId) {
+				setSelectedId(null);
+				setEvents(null);
+				setRenaming(false);
+			}
+			await fetchMonitors();
 		} catch (err) {
 			console.log(err);
 		}
@@ -379,6 +407,17 @@ export default function Home() {
 									<span className='ml-auto text-xs text-neutral-400'>
 										{m.status}
 									</span>
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											deleteMonitor(m.id, m.name);
+										}}
+										title='Delete monitor'
+										aria-label={`Delete ${m.name}`}
+										className='shrink-0 text-neutral-500 hover:text-red-400 transition-colors cursor-pointer'
+									>
+										<Trash2 size={16} />
+									</button>
 								</div>
 							))}
 						</div>

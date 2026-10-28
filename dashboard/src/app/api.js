@@ -1,7 +1,7 @@
-export const API = 'http://localhost:5000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export function api(path, options = {}) {
-	return fetch(`${API}${path}`, {
+	return fetch(`${API_URL}${path}`, {
 		...options,
 		credentials: 'include',
 		headers: {

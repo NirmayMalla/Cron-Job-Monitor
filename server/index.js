@@ -393,6 +393,37 @@ function registerRoutes() {
 		},
 	);
 
+	fastify.delete(
+		'/monitors/:id',
+		{
+			onRequest: requireAuth,
+			schema: {
+				params: {
+					type: 'object',
+					properties: { id: { type: 'integer', minimum: 1 } },
+					required: ['id'],
+				},
+			},
+		},
+		async (req, reply) => {
+			try {
+				const result = await fastify.pg.query(
+					'DELETE FROM monitors WHERE id = $1 AND user_id = $2 RETURNING id',
+					[req.params.id, req.user.id],
+				);
+				if (result.rows.length === 0) {
+					return reply.code(404).send({ error: 'Monitor not found' });
+				}
+				return reply.code(204).send();
+			} catch (err) {
+				fastify.log.error(err);
+				return reply
+					.code(500)
+					.send({ error: 'Failed to delete monitor' });
+			}
+		},
+	);
+
 	// Telemetry (authenticated by the user's key in the URL) 
 
 	fastify.route({
@@ -618,10 +649,13 @@ async function start() {
 		await fastify.register(require('@fastify/postgres'), {
 			connectionString: DATABASE_URL,
 		});
+
 		await fastify.register(require('@fastify/cookie'));
+		
 		await fastify.register(require('@fastify/cors'), {
 			origin: FRONTEND_ORIGIN,
 			credentials: true,
+			methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'],
 		});
 		await fastify.register(require('@fastify/rate-limit'), {
 			max: 600,
