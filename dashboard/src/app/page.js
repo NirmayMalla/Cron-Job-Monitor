@@ -233,7 +233,6 @@ export default function Home() {
 			if (id === selectedId) {
 				setSelectedId(null);
 				setEvents(null);
-				setRenaming(false);
 			}
 			await fetchMonitors();
 		} catch (err) {
@@ -243,8 +242,8 @@ export default function Home() {
 
 	if (!user) return null; // still checking the session (or redirecting to /login)
 
-	// const selected = monitors.find((m) => m.id === selectedId);
-	// const pingUrl = selected && baseUrl ? `${baseUrl}/${selected.monitor_key}` : '';
+	const selected = monitors.find((m) => m.id === selectedId);
+	const pingUrl = selected && baseUrl ? `${baseUrl}/${selected.monitor_key}` : '';
 
 	const inputClass =
 		'rounded-md bg-transparent border border-neutral-500 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none';
@@ -456,6 +455,7 @@ export default function Home() {
 									<MonitorCharts
 										key={selected.id}
 										monitorId={selected.id}
+										pingUrl={pingUrl}
 									/>
 									<table className='w-full mt-6 text-sm text-left'>
 										<thead>
@@ -490,9 +490,9 @@ export default function Home() {
 														colSpan={4}
 														className='py-3 text-xs text-neutral-500'
 													>
-														No events yet. Run one
-														of the curl commands
-														above.
+														No events yet. Use the
+														Commands tab to run a
+														curl command.
 													</td>
 												</tr>
 											) : (
