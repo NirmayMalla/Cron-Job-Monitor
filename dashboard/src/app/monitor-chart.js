@@ -127,9 +127,9 @@ function RunTooltip({ active, payload }) {
 	);
 }
 
-export default function MonitorCharts({ monitorId }) {
+export default function MonitorCharts({ monitorId, pingUrl }) {
 	const [hours, setHours] = useState(24);
-	const [view, setView] = useState('pings'); // "pings" | "duration"
+	const [view, setView] = useState('pings'); // "pings" | "duration" | "commands"
 	const [data, setData] = useState(null); // null = loading
 
 	useEffect(() => {
@@ -168,6 +168,8 @@ export default function MonitorCharts({ monitorId }) {
 			clearInterval(timer);
 		};
 	}, [monitorId, hours]);
+
+	
 
 	if (!data) {
 		return (
@@ -230,6 +232,7 @@ export default function MonitorCharts({ monitorId }) {
 					{[
 						['pings', 'Pings'],
 						['duration', 'Duration'],
+						['commands', 'Commands'],
 					].map(([key, label]) => (
 						<button
 							key={key}
@@ -261,133 +264,152 @@ export default function MonitorCharts({ monitorId }) {
 				</div>
 			</div>
 
-			<div className='grid grid-cols-3 sm:grid-cols-6 gap-3 mb-5'>
-				{stats.map(([label, value]) => (
-					<div
-						key={label}
-						className='rounded-md bg-neutral-800 px-3 py-2'
-					>
-						<div className='text-xs text-neutral-500'>{label}</div>
-						<div className='text-sm text-neutral-200'>{value}</div>
-					</div>
-				))}
-			</div>
+			{view === 'commands' ? (
+				pingUrl ? (
+					<pre className='overflow-x-auto rounded-md bg-black p-3 text-xs text-neutral-300 leading-relaxed'>
+{`# The job has started running
+curl ${pingUrl}?state=run
 
-			<div className='flex gap-4 text-xs text-neutral-400 mb-2'>
-				{legend.map(([key, label]) => (
-					<span
-						key={key}
-						className='inline-flex items-center gap-1.5'
-					>
-						<span
-							className='h-2 w-2 rounded-full'
-							style={{ backgroundColor: COLORS[key] }}
-						/>
-						{label}
-					</span>
-				))}
-			</div>
+# The job has completed successfully
+curl ${pingUrl}?state=complete
 
-			{points.length === 0 ? (
-				<p className='py-10 text-center text-xs text-neutral-500'>
-					No pings in this period.
-				</p>
-			) : view === 'pings' ? (
-				<div className='h-64'>
-					<ResponsiveContainer width='100%' height='100%'>
-						<BarChart
-							data={buckets}
-							margin={margin}
-							barCategoryGap='15%'
-						>
-							{grid}
-							{xAxis}
-							<YAxis
-								allowDecimals={false}
-								domain={[0, (max) => Math.max(max, 1)]}
-								width={40}
-								{...AXIS}
-							/>
-							<Tooltip
-								content={<BucketTooltip view='pings' />}
-								cursor={{ fill: '#262626' }}
-							/>
-							<Bar
-								dataKey='ok'
-								stackId='pings'
-								fill={COLORS.ok}
-								isAnimationActive={false}
-							/>
-							<Bar
-								dataKey='late'
-								stackId='pings'
-								fill={COLORS.late}
-								isAnimationActive={false}
-							/>
-							<Bar
-								dataKey='failed'
-								stackId='pings'
-								fill={COLORS.failed}
-								isAnimationActive={false}
-							/>
-						</BarChart>
-					</ResponsiveContainer>
-				</div>
-			) : sorted.length === 0 ? (
-				<p className='py-10 text-center text-xs text-neutral-500'>
-					No finished runs with a duration in this period.
-				</p>
+# The job has failed
+curl ${pingUrl}?state=fail`}
+					</pre>
+				) : (
+					<p className='text-xs text-neutral-500'>Loading...</p>
+				)
 			) : (
-				<div className='h-64'>
-					<ResponsiveContainer width='100%' height='100%'>
-						<BarChart data={runs} margin={margin}>
-							{grid}
-							<XAxis
-								dataKey='t'
-								tickFormatter={formatTime}
-								minTickGap={40}
-								{...AXIS}
-							/>
-							<YAxis
-								domain={[0, 'auto']}
-								tickFormatter={formatAxisDuration}
-								width={50}
-								{...AXIS}
-							/>
-							<Tooltip
-								content={<RunTooltip />}
-								cursor={{ fill: '#262626' }}
-							/>
-							{avg != null && (
-								<ReferenceLine
-									y={avg}
-									stroke={COLORS.avg}
-									strokeDasharray='4 3'
-								/>
-							)}
-							<Bar
-								dataKey='duration'
-								maxBarSize={28}
-								isAnimationActive={false}
+				<>
+					<div className='grid grid-cols-3 sm:grid-cols-6 gap-3 mb-5'>
+						{stats.map(([label, value]) => (
+							<div
+								key={label}
+								className='rounded-md bg-neutral-800 px-3 py-2'
 							>
-								{runs.map((r) => (
-									<Cell
-										key={r.id}
-										fill={COLORS[r.status] || COLORS.ok}
-									/>
-								))}
-							</Bar>
-						</BarChart>
-					</ResponsiveContainer>
-				</div>
-			)}
+								<div className='text-xs text-neutral-500'>{label}</div>
+								<div className='text-sm text-neutral-200'>{value}</div>
+							</div>
+						))}
+					</div>
 
-			<p className='mt-2 text-xs text-neutral-500'>
-				{view === 'pings'
-					? `Each bar groups ${range.bucketLabel} of activity.`
-                    : 'Each bar is one finished run. The dashed line is the average.'
-                }
-			</p>
+					<div className='flex gap-4 text-xs text-neutral-400 mb-2'>
+						{legend.map(([key, label]) => (
+							<span
+								key={key}
+								className='inline-flex items-center gap-1.5'
+							>
+								<span
+									className='h-2 w-2 rounded-full'
+									style={{ backgroundColor: COLORS[key] }}
+								/>
+								{label}
+							</span>
+						))}
+					</div>
+
+					{points.length === 0 ? (
+						<p className='py-10 text-center text-xs text-neutral-500'>
+							No pings in this period.
+						</p>
+					) : view === 'pings' ? (
+						<div className='h-64'>
+							<ResponsiveContainer width='100%' height='100%'>
+								<BarChart
+									data={buckets}
+									margin={margin}
+									barCategoryGap='15%'
+								>
+									{grid}
+									{xAxis}
+									<YAxis
+										allowDecimals={false}
+										domain={[0, (max) => Math.max(max, 1)]}
+										width={40}
+										{...AXIS}
+									/>
+									<Tooltip
+										content={<BucketTooltip view='pings' />}
+										cursor={{ fill: '#262626' }}
+									/>
+									<Bar
+										dataKey='ok'
+										stackId='pings'
+										fill={COLORS.ok}
+										isAnimationActive={false}
+									/>
+									<Bar
+										dataKey='late'
+										stackId='pings'
+										fill={COLORS.late}
+										isAnimationActive={false}
+									/>
+									<Bar
+										dataKey='failed'
+										stackId='pings'
+										fill={COLORS.failed}
+										isAnimationActive={false}
+									/>
+								</BarChart>
+							</ResponsiveContainer>
+						</div>
+					) : sorted.length === 0 ? (
+						<p className='py-10 text-center text-xs text-neutral-500'>
+							No finished runs with a duration in this period.
+						</p>
+					) : (
+						<div className='h-64'>
+							<ResponsiveContainer width='100%' height='100%'>
+								<BarChart data={runs} margin={margin}>
+									{grid}
+									<XAxis
+										dataKey='t'
+										tickFormatter={formatTime}
+										minTickGap={40}
+										{...AXIS}
+									/>
+									<YAxis
+										domain={[0, 'auto']}
+										tickFormatter={formatAxisDuration}
+										width={50}
+										{...AXIS}
+									/>
+									<Tooltip
+										content={<RunTooltip />}
+										cursor={{ fill: '#262626' }}
+									/>
+									{avg != null && (
+										<ReferenceLine
+											y={avg}
+											stroke={COLORS.avg}
+											strokeDasharray='4 3'
+										/>
+									)}
+									<Bar
+										dataKey='duration'
+										maxBarSize={28}
+										isAnimationActive={false}
+									>
+										{runs.map((r) => (
+											<Cell
+												key={r.id}
+												fill={COLORS[r.status] || COLORS.ok}
+											/>
+										))}
+									</Bar>
+								</BarChart>
+							</ResponsiveContainer>
+						</div>
+					)}
+
+					<p className='mt-2 text-xs text-neutral-500'>
+						{view === 'pings'
+							? `Each bar groups ${range.bucketLabel} of activity.`
+							: 'Each bar is one finished run. The dashed line is the average.'
+						}
+					</p>
+				</>
+			)}
 		</div>
 	);
 }

@@ -243,9 +243,8 @@ export default function Home() {
 
 	if (!user) return null; // still checking the session (or redirecting to /login)
 
-	const selected = monitors.find((m) => m.id === selectedId);
-	// const pingUrl =
-	// 	selected && baseUrl ? `${baseUrl}/${selected.monitor_key}` : '';
+	// const selected = monitors.find((m) => m.id === selectedId);
+	// const pingUrl = selected && baseUrl ? `${baseUrl}/${selected.monitor_key}` : '';
 
 	const inputClass =
 		'rounded-md bg-transparent border border-neutral-500 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none';
