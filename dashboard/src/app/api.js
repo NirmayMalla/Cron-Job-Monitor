@@ -1,7 +1,7 @@
 export const API_URL = "/api";
 
 export function api(path, options = {}) {
-	return fetch(`${API}${path}`, {
+	return fetch(`${API_URL}${path}`, {
 		...options,
 		credentials: 'include',
 		headers: {
